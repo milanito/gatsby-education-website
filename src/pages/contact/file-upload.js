@@ -1,6 +1,6 @@
 import React from "react";
 import { navigateTo } from "gatsby-link";
-import Layout from '../../components/Layout'
+import Layout from '../../components/hoc/Layout'
 
 function encode(data) {
   const formData = new FormData();

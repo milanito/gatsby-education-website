@@ -1,87 +1,91 @@
-const _ = require('lodash')
 const path = require('path')
 const { createFilePath } = require('gatsby-source-filesystem')
 const { fmImagesToRelative } = require('gatsby-remark-relative-images')
+const { get, uniq, kebabCase, forEach, isEqual, reduce } = require('lodash')
 
-exports.createPages = ({ actions, graphql }) => {
-  const { createPage } = actions
-
-  return graphql(`
-    {
-      allMarkdownRemark(limit: 1000) {
-        edges {
-          node {
-            id
-            fields {
-              slug
-            }
-            frontmatter {
-              tags
-              templateKey
-            }
+const POSTS_QUERY = `
+  {
+    allMarkdownRemark(limit: 1000) {
+      edges {
+        node {
+          id
+          fields {
+            slug
+          }
+          frontmatter {
+            tags
+            categorie
+            templateKey
           }
         }
       }
     }
-  `).then(result => {
-    if (result.errors) {
-      result.errors.forEach(e => console.error(e.toString()))
-      return Promise.reject(result.errors)
+  }
+`
+
+const createPostsPages = (createPage, posts) =>
+  forEach(posts, edge => createPage({
+    path: edge.node.fields.slug,
+    tags: edge.node.frontmatter.tags,
+    component: path.resolve(`src/templates/${String(edge.node.frontmatter.templateKey)}.js`),
+    // additional data can be passed via context
+    context: {
+      id: edge.node.id,
+    },
+  }))
+
+const createTagsPages = (createPage, posts) =>
+  forEach(uniq(reduce(posts, (tags, edge) => {
+    if (get(edge, `node.frontmatter.tags`)) {
+      return [...tags, ...edge.node.frontmatter.tags]
     }
+    return tags
+  }, [])), tag => createPage({
+      path: `/tags/${kebabCase(tag)}/`,
+      component: path.resolve(`src/templates/tags.js`),
+      context: { tag },
+  }))
 
-    const posts = result.data.allMarkdownRemark.edges
+const createCategoriesPages = (createPage, posts) =>
+  forEach(uniq(reduce(posts, (categories, edge) => {
+    if (get(edge, `node.frontmatter.categorie`)) {
+      return [...categories, edge.node.frontmatter.categorie]
+    }
+    return categories
+  }, [])), categorie => createPage({
+      path: `/categories/${kebabCase(categorie)}/`,
+      component: path.resolve(`src/templates/categories.js`),
+      context: { categorie },
+  }))
 
-    posts.forEach(edge => {
-      const id = edge.node.id
-      createPage({
-        path: edge.node.fields.slug,
-        tags: edge.node.frontmatter.tags,
-        component: path.resolve(
-          `src/templates/${String(edge.node.frontmatter.templateKey)}.js`
-        ),
-        // additional data can be passed via context
-        context: {
-          id,
-        },
-      })
-    })
+exports.createPages = ({ actions, graphql }) => {
+  const { createPage } = actions
 
-    // Tag pages:
-    let tags = []
-    // Iterate through each post, putting all found tags into `tags`
-    posts.forEach(edge => {
-      if (_.get(edge, `node.frontmatter.tags`)) {
-        tags = tags.concat(edge.node.frontmatter.tags)
+  return graphql(POSTS_QUERY)
+    .then(result => {
+      if (result.errors) {
+        result.errors.forEach(e => console.error(e.toString()))
+        return Promise.reject(result.errors)
       }
-    })
-    // Eliminate duplicate tags
-    tags = _.uniq(tags)
 
-    // Make tag pages
-    tags.forEach(tag => {
-      const tagPath = `/tags/${_.kebabCase(tag)}/`
-
-      createPage({
-        path: tagPath,
-        component: path.resolve(`src/templates/tags.js`),
-        context: {
-          tag,
-        },
-      })
+      // Posts pages
+      createPostsPages(createPage, result.data.allMarkdownRemark.edges)
+      // Categories pages
+      createCategoriesPages(createPage, result.data.allMarkdownRemark.edges)
+      // Tag pages
+      createTagsPages(createPage, result.data.allMarkdownRemark.edges)
     })
-  })
 }
 
 exports.onCreateNode = ({ node, actions, getNode }) => {
   const { createNodeField } = actions
   fmImagesToRelative(node) // convert image paths for gatsby images
 
-  if (node.internal.type === `MarkdownRemark`) {
-    const value = createFilePath({ node, getNode })
-    createNodeField({
+  if (isEqual(node.internal.type, 'MarkdownRemark')) {
+    return createNodeField({
       name: `slug`,
-      node,
-      value,
+      value: createFilePath({ node, getNode }),
+      node
     })
   }
 }

@@ -57,6 +57,13 @@ module.exports = {
         modulePath: `${__dirname}/src/cms/cms.js`,
       },
     },
+    {
+      resolve: `gatsby-plugin-styled-components`,
+      options: {
+        // Add any options here
+      },
+    },
+    'gatsby-plugin-lodash',
     'gatsby-plugin-netlify', // make sure to keep it last in the array
   ],
 }
